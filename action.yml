@@ -1,0 +1,24 @@
+name: 'SynchroIaC Drift Scanner'
+description: 'Detects infrastructure drift between Terraform state and live AWS resources'
+inputs:
+  api-key:
+    description: 'SynchroIaC API key'
+    required: true
+  aws-region:
+    description: 'AWS region to scan'
+    required: true
+    default: 'us-east-1'
+  terraform-path:
+    description: 'Path to Terraform directory containing terraform.tfstate or backend config'
+    required: true
+    default: './terraform'
+  api-url:
+    description: 'SynchroIaC API base URL'
+    required: false
+    default: 'https://synchroiac.vercel.app'
+runs:
+  using: 'composite'
+  steps:
+    - name: Run SynchroIaC scanner
+      shell: bash
+      run: echo "Scanner not yet built"
