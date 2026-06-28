@@ -1,24 +1,56 @@
-name: 'SynchroIaC Drift Scanner'
-description: 'Detects infrastructure drift between Terraform state and live AWS resources'
+name: SynchroIaC Drift Scanner
+description: Detects infrastructure drift between Terraform state
+             and live AWS resources and reports to SynchroIaC.
+branding:
+  icon: shield
+  color: purple
+
 inputs:
   api-key:
-    description: 'SynchroIaC API key'
+    description: SynchroIaC API key (dashboard → settings → API keys)
+    required: true
+  project-id:
+    description: SynchroIaC project UUID (dashboard → projects → settings)
     required: true
   aws-region:
-    description: 'AWS region to scan'
-    required: true
-    default: 'us-east-1'
-  terraform-path:
-    description: 'Path to Terraform directory containing terraform.tfstate or backend config'
-    required: true
-    default: './terraform'
-  api-url:
-    description: 'SynchroIaC API base URL'
+    description: AWS region to scan
     required: false
-    default: 'https://synchroiac.vercel.app'
+    default: us-east-1
+  terraform-path:
+    description: Path to Terraform directory containing terraform.tfstate
+    required: false
+    default: ./terraform
+  api-url:
+    description: SynchroIaC API base URL
+    required: false
+    default: https://synchroiac.vercel.app
+  scanner-version:
+    description: Scanner version label included in scan records
+    required: false
+    default: "0.1.0"
+
 runs:
-  using: 'composite'
+  using: composite
   steps:
-    - name: Run SynchroIaC scanner
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: "1.22"
+        cache: false
+
+    - name: Build SynchroIaC scanner
       shell: bash
-      run: echo "Scanner not yet built"
+      run: |
+        cd ${{ github.action_path }}/scanner
+        go build -o /tmp/synchroiac-scanner .
+
+    - name: Run drift scan
+      shell: bash
+      env:
+        SYNCHROIAC_API_URL: ${{ inputs.api-url }}
+        SYNCHROIAC_API_KEY: ${{ inputs.api-key }}
+        SYNCHROIAC_PROJECT_ID: ${{ inputs.project-id }}
+        TERRAFORM_PATH: ${{ inputs.terraform-path }}
+        AWS_REGION: ${{ inputs.aws-region }}
+        SCANNER_VERSION: ${{ inputs.scanner-version }}
+      run: /tmp/synchroiac-scanner
