@@ -1,3 +1,5 @@
-export default function Page() {
-  return <div>WIP</div>
+import { redirect } from 'next/navigation'
+
+export default function DashboardPage() {
+  redirect('/dashboard/projects')
 }

@@ -72,28 +72,29 @@ async function parseJsonBody(req: Request) {
 }
 
 async function getProjectScanStats(projectIds: string[]) {
-  if (projectIds.length === 0) return new Map<string, { scan_count: number; last_scan_at: string | null }>()
+  if (projectIds.length === 0) return new Map<string, { scan_count: number; last_scan_at: string | null; latest_scan_total_drifts: number | null }>()
 
   const { data, error } = await supabase
     .from('scans')
-    .select('project_id, started_at')
+    .select('project_id, started_at, total_drifts')
     .in('project_id', projectIds)
 
   if (error) throw error
 
-  const stats = new Map<string, { scan_count: number; last_scan_at: string | null }>()
+  const stats = new Map<string, { scan_count: number; last_scan_at: string | null; latest_scan_total_drifts: number | null }>()
   for (const id of projectIds) {
-    stats.set(id, { scan_count: 0, last_scan_at: null })
+    stats.set(id, { scan_count: 0, last_scan_at: null, latest_scan_total_drifts: null })
   }
 
   for (const scan of data ?? []) {
     const projectId = scan.project_id as string
-    const projectStats = stats.get(projectId) ?? { scan_count: 0, last_scan_at: null }
+    const projectStats = stats.get(projectId) ?? { scan_count: 0, last_scan_at: null, latest_scan_total_drifts: null }
     projectStats.scan_count += 1
 
     const startedAt = scan.started_at as string | null
     if (startedAt && (!projectStats.last_scan_at || startedAt > projectStats.last_scan_at)) {
       projectStats.last_scan_at = startedAt
+      projectStats.latest_scan_total_drifts = scan.total_drifts as number
     }
 
     stats.set(projectId, projectStats)
@@ -120,7 +121,8 @@ export async function GET(req: Request) {
     const projectsWithStats = (projects ?? []).map((project) => ({
       ...project,
       scan_count: stats.get(project.id as string)?.scan_count ?? 0,
-      last_scan_at: stats.get(project.id as string)?.last_scan_at ?? null
+      last_scan_at: stats.get(project.id as string)?.last_scan_at ?? null,
+      latest_scan_total_drifts: stats.get(project.id as string)?.latest_scan_total_drifts ?? null
     }))
 
     return Response.json({ projects: projectsWithStats, total: count ?? projectsWithStats.length })
