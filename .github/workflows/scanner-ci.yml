@@ -1,0 +1,40 @@
+name: Scanner CI
+
+on:
+  push:
+    paths:
+      - scanner/**
+      - action.yml
+  pull_request:
+    paths:
+      - scanner/**
+      - action.yml
+
+jobs:
+  test:
+    name: Test and build scanner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Run unit tests
+        working-directory: scanner
+        run: go test ./diff/... ./terraform/... -v
+
+      - name: Verify full build
+        working-directory: scanner
+        run: go build ./...
+
+      - name: Check formatting
+        working-directory: scanner
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
