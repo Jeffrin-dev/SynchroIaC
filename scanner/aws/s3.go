@@ -18,30 +18,22 @@ func ScanS3(ctx context.Context, cfg awssdk.Config) ([]ResourceState, error) {
 	client := s3.NewFromConfig(cfg)
 	resources := make([]ResourceState, 0)
 
-	var token *string
-	for {
-		out, err := client.ListBuckets(ctx, &s3.ListBucketsInput{ContinuationToken: token})
-		if err != nil {
-			return nil, fmt.Errorf("aws.ScanS3: ListBuckets failed: %w", err)
-		}
+	out, err := client.ListBuckets(ctx, &s3.ListBucketsInput{})
+	if err != nil {
+		return nil, fmt.Errorf("aws.ScanS3: ListBuckets failed: %w", err)
+	}
 
-		for _, bucket := range out.Buckets {
-			name := awssdk.ToString(bucket.Name)
-			attrs, skip := scanS3Bucket(ctx, client, name)
-			if skip {
-				continue
-			}
-			resources = append(resources, ResourceState{
-				ResourceType: "aws_s3_bucket",
-				ResourceID:   name,
-				Attributes:   attrs,
-			})
+	for _, bucket := range out.Buckets {
+		name := awssdk.ToString(bucket.Name)
+		attrs, skip := scanS3Bucket(ctx, client, name)
+		if skip {
+			continue
 		}
-
-		if out.NextContinuationToken == nil || awssdk.ToString(out.NextContinuationToken) == "" {
-			break
-		}
-		token = out.NextContinuationToken
+		resources = append(resources, ResourceState{
+			ResourceType: "aws_s3_bucket",
+			ResourceID:   name,
+			Attributes:   attrs,
+		})
 	}
 
 	return resources, nil

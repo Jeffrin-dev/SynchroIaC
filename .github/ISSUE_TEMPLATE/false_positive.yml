@@ -1,0 +1,24 @@
+name: False Positive Report
+description: SynchroIaC reported drift that does not actually exist
+labels: ["false-positive"]
+body:
+  - type: input
+    id: resource_type
+    attributes:
+      label: Resource type
+      placeholder: "e.g. aws_instance"
+    validations:
+      required: true
+  - type: input
+    id: attribute
+    attributes:
+      label: Drifted attribute
+      placeholder: "e.g. instance_type"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What did SynchroIaC report vs what you see in AWS?
+    validations:
+      required: true

@@ -1,0 +1,17 @@
+name: Feature Request
+description: Request a new AWS resource or feature
+labels: ["enhancement"]
+body:
+  - type: input
+    id: resource
+    attributes:
+      label: AWS resource or feature requested
+      placeholder: "e.g. aws_rds_instance drift detection"
+    validations:
+      required: true
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Why do you need this?
+    validations:
+      required: true
