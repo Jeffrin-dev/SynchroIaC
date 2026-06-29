@@ -1,5 +1,3 @@
-import { env } from './env'
-
 export type DriftExplainInput = {
   resourceType: string
   resourceId: string
