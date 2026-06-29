@@ -30,5 +30,5 @@ export const env = {
   DASHBOARD_API_KEY: process.env.DASHBOARD_API_KEY ?? '',
   PADDLE_PRICE_ID_PRO: process.env.PADDLE_PRICE_ID_PRO ?? '',
   PADDLE_PRICE_ID_TEAM: process.env.PADDLE_PRICE_ID_TEAM ?? '',
-  SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ?? ''
+  SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
 }
