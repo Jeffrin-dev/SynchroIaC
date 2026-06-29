@@ -1,5 +1,5 @@
 import { badRequest, ok, serverError } from '../../../../lib/api-response'
-import { requireAuth } from '../../../../lib/auth'
+import { withAuth } from '../../../../lib/auth'
 import { supabase } from '../../../../lib/supabase'
 
 type OrgPatchBody = { name?: unknown }
@@ -22,9 +22,8 @@ async function parseJsonBody(req: Request) {
 }
 
 export async function GET(req: Request) {
-  const org = await requireAuth(req)
-
-  const { data: organization, error: orgError } = await supabase
+  return withAuth(req, async (_req, org) => {
+    const { data: organization, error: orgError } = await supabase
     .from('organizations')
     .select('id, name, plan, paddle_subscription_id, created_at, api_key')
     .eq('id', org.id)
@@ -36,7 +35,7 @@ export async function GET(req: Request) {
 
   const { data: notificationConfigs, error: configsError } = await supabase
     .from('notification_configs')
-    .select('*')
+    .select('id, type, config, enabled, created_at')
     .eq('org_id', org.id)
     .order('created_at', { ascending: false })
 
@@ -44,17 +43,18 @@ export async function GET(req: Request) {
     return serverError('Failed to fetch notification configs')
   }
 
-  const { api_key: apiKey, paddle_subscription_id: _subscriptionId, ...safeOrg } = organization as Record<string, any>
+  const { api_key: apiKey, paddle_subscription_id: _, ...safeOrg } = organization as Record<string, any>
 
   return ok({
     org: safeOrg,
-    notification_configs: notificationConfigs ?? [],
-    api_key_preview: previewApiKey(apiKey as string)
+      notification_configs: notificationConfigs ?? [],
+      api_key_preview: previewApiKey(apiKey as string)
+    })
   })
 }
 
 export async function PATCH(req: Request) {
-  const org = await requireAuth(req)
+  return withAuth(req, async (req, org) => {
   const { body, error: bodyError } = await parseJsonBody(req)
 
   if (bodyError || !body) {
@@ -76,9 +76,10 @@ export async function PATCH(req: Request) {
     .select('id, name, plan, paddle_subscription_id, created_at')
     .single()
 
-  if (error || !data) {
-    return serverError('Failed to update organization')
-  }
+    if (error || !data) {
+      return serverError('Failed to update organization')
+    }
 
-  return ok({ org: data })
+    return ok({ org: data })
+  })
 }

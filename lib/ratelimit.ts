@@ -14,6 +14,14 @@ const buckets = new Map<string, RateLimitBucket>()
 
 export function checkRateLimit(key: string, limit: number, windowMs: number): RateLimitResult {
   const now = Date.now()
+
+  // Clean up expired entries to prevent unbounded Map growth
+  buckets.forEach((b, k) => {
+    if (now > b.resetAt) {
+      buckets.delete(k)
+    }
+  })
+
   let bucket = buckets.get(key)
 
   if (!bucket || now > bucket.resetAt) {

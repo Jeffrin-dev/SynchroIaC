@@ -179,7 +179,7 @@ export async function createDriftFixPR(input: CreatePRInput): Promise<string> {
   const contentsUrl = `${repoApiUrl}/contents/${filePath}`
   const putFileBody = {
     message: `fix: SynchroIaC drift reconciliation for ${input.resourceId}`,
-    content: Buffer.from(fileContent, 'utf8').toString('base64'),
+    content: Buffer.from(fileContent, 'utf-8').toString('base64'),
     branch: branchName
   }
 

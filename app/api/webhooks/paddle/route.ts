@@ -67,31 +67,39 @@ export async function POST(req: Request) {
   }
 
   if (eventType === 'subscription.canceled') {
-    const { error } = await supabase
-      .from('organizations')
-      .update({
-        plan: 'free',
-        paddle_subscription_id: null
-      })
-      .eq('id', orgId)
+    try {
+      const { error } = await supabase
+        .from('organizations')
+        .update({
+          plan: 'free',
+          paddle_subscription_id: null
+        })
+        .eq('id', orgId)
 
-    if (error) {
-      console.error('Failed to clear canceled Paddle subscription', error)
+      if (error) {
+        console.error('Failed to clear canceled Paddle subscription', error)
+      }
+    } catch (error) {
+      console.error('Unexpected error clearing canceled Paddle subscription', error)
     }
 
     return ok({ received: true })
   }
 
-  const { error } = await supabase
-    .from('organizations')
-    .update({
-      plan: subscription.plan,
-      paddle_subscription_id: subscription.subscriptionId
-    })
-    .eq('id', orgId)
+  try {
+    const { error } = await supabase
+      .from('organizations')
+      .update({
+        plan: subscription.plan,
+        paddle_subscription_id: subscription.subscriptionId
+      })
+      .eq('id', orgId)
 
-  if (error) {
-    console.error('Failed to update Paddle subscription', error)
+    if (error) {
+      console.error('Failed to update Paddle subscription', error)
+    }
+  } catch (error) {
+    console.error('Unexpected error updating Paddle subscription', error)
   }
 
   return ok({ received: true })

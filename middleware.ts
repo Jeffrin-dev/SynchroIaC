@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const publicPaths = ['/', '/api/webhooks/paddle', '/api/v1/ingest']
+const publicPaths = ['/', '/api/ping', '/api/webhooks/paddle', '/api/v1/ingest']
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
@@ -26,5 +26,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/dashboard/:path*', '/api/webhooks/paddle', '/api/v1/ingest']
+  matcher: ['/', '/api/ping', '/dashboard/:path*', '/api/webhooks/paddle', '/api/v1/ingest']
 }

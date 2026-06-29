@@ -1,5 +1,5 @@
 import { badGateway, notFound, ok, paymentRequired, tooManyRequests } from '../../../../../../lib/api-response'
-import { requireAuth } from '../../../../../../lib/auth'
+import { withAuth } from '../../../../../../lib/auth'
 import { explainDrift, type DriftExplainInput } from '../../../../../../lib/openrouter'
 import { checkRateLimit } from '../../../../../../lib/ratelimit'
 import { supabase } from '../../../../../../lib/supabase'
@@ -17,11 +17,7 @@ const DRIFT_SELECT = `
   drift_type,
   risk_level,
   explanation,
-  created_at,
-  scans!inner(
-    project_id,
-    projects!inner(org_id)
-  )
+  created_at
 `
 
 type RouteContext = {
@@ -45,18 +41,21 @@ type DriftRecord = {
 }
 
 async function fetchDriftForOrg(id: string, orgId: string): Promise<DriftRecord | null> {
-  const { data, error } = await supabase
-    .from('drifts')
-    .select(DRIFT_SELECT)
-    .eq('id', id)
-    .eq('scans.projects.org_id', orgId)
-    .maybeSingle()
+  const { data: projects } = await supabase.from('projects').select('id').eq('org_id', orgId)
+  const projectIds = projects?.map((p) => p.id) ?? []
+
+  if (projectIds.length === 0) return null
+
+  const { data: scans } = await supabase.from('scans').select('id').in('project_id', projectIds)
+  const scanIds = scans?.map((s) => s.id) ?? []
+
+  if (scanIds.length === 0) return null
+
+  const { data, error } = await supabase.from('drifts').select(DRIFT_SELECT).eq('id', id).in('scan_id', scanIds).maybeSingle()
 
   if (error || !data) return null
 
-  const { scans, ...drift } = data as Record<string, unknown>
-  void scans
-  return drift as DriftRecord
+  return data as DriftRecord
 }
 
 function stringifyDriftValue(value: unknown): string {
@@ -84,10 +83,20 @@ function startOfCurrentMonthIso(): string {
 }
 
 async function countMonthlyExplanations(orgId: string): Promise<number> {
+  const { data: projects } = await supabase.from('projects').select('id').eq('org_id', orgId)
+  const projectIds = projects?.map((p) => p.id) ?? []
+
+  if (projectIds.length === 0) return 0
+
+  const { data: scans } = await supabase.from('scans').select('id').in('project_id', projectIds)
+  const scanIds = scans?.map((s) => s.id) ?? []
+
+  if (scanIds.length === 0) return 0
+
   const { count, error } = await supabase
     .from('drifts')
-    .select('id, scans!inner(projects!inner(org_id))', { count: 'exact', head: true })
-    .eq('scans.projects.org_id', orgId)
+    .select('id', { count: 'exact', head: true })
+    .in('scan_id', scanIds)
     .not('explanation', 'is', null)
     .gte('created_at', startOfCurrentMonthIso())
 
@@ -99,24 +108,24 @@ async function countMonthlyExplanations(orgId: string): Promise<number> {
 }
 
 export async function POST(req: Request, { params }: RouteContext) {
-  const org = await requireAuth(req)
-  const rateLimit = checkRateLimit(`explain:${org.id}`, 20, 60_000)
-  if (!rateLimit.allowed) {
-    return tooManyRequests(rateLimit.resetAt - Date.now())
-  }
+  return withAuth(req, async (req, org) => {
+    const rateLimit = checkRateLimit(`explain:${org.id}`, 20, 60_000)
+    if (!rateLimit.allowed) {
+      return tooManyRequests(rateLimit.resetAt - Date.now())
+    }
 
-  const drift = await fetchDriftForOrg(params.id, org.id)
+    const drift = await fetchDriftForOrg(params.id, org.id)
 
-  if (!drift) {
-    return notFound('Drift not found')
-  }
+    if (!drift) {
+      return notFound('Drift not found')
+    }
 
-  const cachedExplanation = drift.explanation?.trim()
-  if (cachedExplanation) {
-    return ok({ explanation: cachedExplanation, cached: true })
-  }
+    const cachedExplanation = drift.explanation?.trim()
+    if (cachedExplanation) {
+      return ok({ explanation: cachedExplanation, cached: true })
+    }
 
-  if (org.plan === 'free') {
+    if (org.plan === 'free') {
     const monthlyExplanationCount = await countMonthlyExplanations(org.id)
     if (monthlyExplanationCount >= FREE_PLAN_MONTHLY_EXPLANATION_LIMIT) {
       return paymentRequired('Monthly AI explanation limit reached on free plan', '/dashboard/billing')
@@ -131,10 +140,11 @@ export async function POST(req: Request, { params }: RouteContext) {
     return badGateway('AI explanation failed', message)
   }
 
-  const { error: updateError } = await supabase.from('drifts').update({ explanation }).eq('id', drift.id)
-  if (updateError) {
-    console.error('Failed to store drift explanation', updateError)
-  }
+    const { error: updateError } = await supabase.from('drifts').update({ explanation }).eq('id', drift.id)
+    if (updateError) {
+      console.error('Failed to store drift explanation', updateError)
+    }
 
-  return ok({ explanation, cached: false })
+    return ok({ explanation, cached: false })
+  })
 }

@@ -1,5 +1,5 @@
 import { ok, badRequest, notFound, serverError } from '../../../../../lib/api-response'
-import { requireAuth } from '../../../../../lib/auth'
+import { withAuth } from '../../../../../lib/auth'
 import { supabase } from '../../../../../lib/supabase'
 
 const AWS_REGION_REGEX = /^[a-z]{2}-[a-z]+-[0-9]$/
@@ -65,7 +65,7 @@ async function parseJsonBody(req: Request) {
 async function fetchProjectForOrg(id: string, orgId: string) {
   const { data, error } = await supabase
     .from('projects')
-    .select('*')
+    .select('id, name, repo_url, terraform_path, aws_region, created_at')
     .eq('id', id)
     .eq('org_id', orgId)
     .maybeSingle()
@@ -75,8 +75,8 @@ async function fetchProjectForOrg(id: string, orgId: string) {
 }
 
 export async function GET(req: Request, { params }: RouteContext) {
-  const org = await requireAuth(req)
-  const project = await fetchProjectForOrg(params.id, org.id)
+  return withAuth(req, async (_req, org) => {
+    const project = await fetchProjectForOrg(params.id, org.id)
 
   if (!project) {
     return notFound('Project not found')
@@ -89,16 +89,17 @@ export async function GET(req: Request, { params }: RouteContext) {
     .order('started_at', { ascending: false })
     .limit(5)
 
-  if (error) {
-    return serverError('Failed to fetch recent scans')
-  }
+    if (error) {
+      return serverError('Failed to fetch recent scans')
+    }
 
-  return ok({ ...project, recent_scans: scans ?? [] })
+    return ok({ ...project, recent_scans: scans ?? [] })
+  })
 }
 
 export async function PATCH(req: Request, { params }: RouteContext) {
-  const org = await requireAuth(req)
-  const project = await fetchProjectForOrg(params.id, org.id)
+  return withAuth(req, async (req, org) => {
+    const project = await fetchProjectForOrg(params.id, org.id)
 
   if (!project) {
     return notFound('Project not found')
@@ -127,19 +128,20 @@ export async function PATCH(req: Request, { params }: RouteContext) {
     .update(update)
     .eq('id', params.id)
     .eq('org_id', org.id)
-    .select('*')
+    .select('id, name, repo_url, terraform_path, aws_region, created_at')
     .single()
 
-  if (error) {
-    return serverError('Failed to update project')
-  }
+    if (error) {
+      return serverError('Failed to update project')
+    }
 
-  return ok(data)
+    return ok(data)
+  })
 }
 
 export async function DELETE(req: Request, { params }: RouteContext) {
-  const org = await requireAuth(req)
-  const project = await fetchProjectForOrg(params.id, org.id)
+  return withAuth(req, async (_req, org) => {
+    const project = await fetchProjectForOrg(params.id, org.id)
 
   if (!project) {
     return notFound('Project not found')
@@ -151,9 +153,10 @@ export async function DELETE(req: Request, { params }: RouteContext) {
     .eq('id', params.id)
     .eq('org_id', org.id)
 
-  if (error) {
-    return serverError('Failed to delete project')
-  }
+    if (error) {
+      return serverError('Failed to delete project')
+    }
 
-  return ok({ deleted: true, id: params.id })
+    return ok({ deleted: true, id: params.id })
+  })
 }

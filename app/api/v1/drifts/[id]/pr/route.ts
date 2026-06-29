@@ -1,5 +1,5 @@
 import { badGateway, created, notFound, ok, paymentRequired, tooManyRequests } from '../../../../../../lib/api-response'
-import { requireAuth } from '../../../../../../lib/auth'
+import { withAuth } from '../../../../../../lib/auth'
 import { createDriftFixPR, type CreatePRInput } from '../../../../../../lib/github'
 import { checkRateLimit } from '../../../../../../lib/ratelimit'
 import { supabase } from '../../../../../../lib/supabase'
@@ -15,9 +15,9 @@ const DRIFT_SELECT = `
   risk_level,
   explanation,
   pr_url,
-  scans!inner(
+  scans(
     project_id,
-    projects!inner(org_id, repo_url)
+    projects(org_id, repo_url)
   )
 `
 
@@ -61,12 +61,17 @@ function flattenDrift(row: Record<string, any>): DriftRecord {
 }
 
 async function fetchDriftForOrg(id: string, orgId: string): Promise<DriftRecord | null> {
-  const { data, error } = await supabase
-    .from('drifts')
-    .select(DRIFT_SELECT)
-    .eq('id', id)
-    .eq('scans.projects.org_id', orgId)
-    .maybeSingle()
+  const { data: projects } = await supabase.from('projects').select('id').eq('org_id', orgId)
+  const projectIds = projects?.map((p) => p.id) ?? []
+
+  if (projectIds.length === 0) return null
+
+  const { data: scans } = await supabase.from('scans').select('id').in('project_id', projectIds)
+  const scanIds = scans?.map((s) => s.id) ?? []
+
+  if (scanIds.length === 0) return null
+
+  const { data, error } = await supabase.from('drifts').select(DRIFT_SELECT).eq('id', id).in('scan_id', scanIds).maybeSingle()
 
   if (error || !data) return null
   return flattenDrift(data as Record<string, any>)
@@ -87,43 +92,47 @@ function buildCreatePRInput(drift: DriftRecord): CreatePRInput {
 }
 
 export async function POST(req: Request, { params }: RouteContext) {
-  const org = await requireAuth(req)
-  const rateLimit = checkRateLimit(`pr:${org.id}`, 10, 60_000)
-  if (!rateLimit.allowed) {
-    return tooManyRequests(rateLimit.resetAt - Date.now())
-  }
+  return withAuth(req, async (req, org) => {
+    const rateLimit = checkRateLimit(`pr:${org.id}`, 10, 60_000)
+    if (!rateLimit.allowed) {
+      return tooManyRequests(rateLimit.resetAt - Date.now())
+    }
 
-  const drift = await fetchDriftForOrg(params.id, org.id)
+    const drift = await fetchDriftForOrg(params.id, org.id)
 
-  if (!drift) {
-    return notFound('Drift not found')
-  }
+    if (!drift) {
+      return notFound('Drift not found')
+    }
 
-  if (!drift.repo_url?.trim()) {
-    return badGateway('No repository URL configured for this project', 'Set repo_url on the project before generating fix PRs')
-  }
+    if (!drift.repo_url?.trim()) {
+      return new Response(JSON.stringify({ error: 'No repository URL configured for this project', details: 'Set repo_url on the project before generating fix PRs' }), {
+        status: 422,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
 
-  const existingPrUrl = drift.pr_url?.trim()
-  if (existingPrUrl) {
-    return ok({ pr_url: existingPrUrl, cached: true })
-  }
+    const existingPrUrl = drift.pr_url?.trim()
+    if (existingPrUrl) {
+      return ok({ pr_url: existingPrUrl, cached: true })
+    }
 
-  if (org.plan === 'free') {
-    return paymentRequired('PR generation requires a pro or team plan', '/dashboard/billing')
-  }
+    if (org.plan === 'free') {
+      return paymentRequired('PR generation requires a pro or team plan', '/dashboard/billing')
+    }
 
-  let prUrl: string
-  try {
-    prUrl = await createDriftFixPR(buildCreatePRInput(drift))
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    return badGateway('Failed to create GitHub PR', message)
-  }
+    let prUrl: string
+    try {
+      prUrl = await createDriftFixPR(buildCreatePRInput(drift))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return badGateway('Failed to create GitHub PR', message)
+    }
 
-  const { error: updateError } = await supabase.from('drifts').update({ pr_url: prUrl }).eq('id', drift.id)
-  if (updateError) {
-    console.error('Failed to store drift PR URL', updateError)
-  }
+    const { error: updateError } = await supabase.from('drifts').update({ pr_url: prUrl }).eq('id', drift.id)
+    if (updateError) {
+      console.error('Failed to store drift PR URL', updateError)
+    }
 
-  return created({ pr_url: prUrl, cached: false })
+    return created({ pr_url: prUrl, cached: false })
+  })
 }

@@ -30,3 +30,18 @@ export async function requireAuth(req: Request): Promise<OrgContext> {
 
   return org as OrgContext
 }
+
+export async function withAuth(
+  req: Request,
+  handler: (_req: Request, _org: OrgContext) => Promise<Response>
+): Promise<Response> {
+  try {
+    const org = await requireAuth(req)
+    return await handler(req, org)
+  } catch (error) {
+    if (error instanceof Response) {
+      return error
+    }
+    throw error
+  }
+}

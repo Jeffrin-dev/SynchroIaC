@@ -1,5 +1,5 @@
 import { ok, badRequest, notFound, serverError } from '../../../../../../lib/api-response'
-import { requireAuth } from '../../../../../../lib/auth'
+import { withAuth } from '../../../../../../lib/auth'
 import { supabase } from '../../../../../../lib/supabase'
 
 type Params = { params: { id: string } }
@@ -8,7 +8,7 @@ type PatchBody = { enabled?: unknown }
 async function fetchConfig(id: string, orgId: string) {
   const { data, error } = await supabase
     .from('notification_configs')
-    .select('*')
+    .select('id, type, config, enabled, created_at')
     .eq('id', id)
     .eq('org_id', orgId)
     .single()
@@ -28,8 +28,8 @@ async function parseJsonBody(req: Request) {
 }
 
 export async function PATCH(req: Request, { params }: Params) {
-  const org = await requireAuth(req)
-  const existing = await fetchConfig(params.id, org.id)
+  return withAuth(req, async (req, org) => {
+    const existing = await fetchConfig(params.id, org.id)
   if (!existing) return notFound('Notification config not found')
 
   const { body, error: bodyError } = await parseJsonBody(req)
@@ -41,16 +41,17 @@ export async function PATCH(req: Request, { params }: Params) {
     .update({ enabled: body.enabled })
     .eq('id', params.id)
     .eq('org_id', org.id)
-    .select('*')
+    .select('id, type, config, enabled, created_at')
     .single()
 
-  if (error || !data) return serverError('Failed to update notification config')
-  return ok(data)
+    if (error || !data) return serverError('Failed to update notification config')
+    return ok(data)
+  })
 }
 
 export async function DELETE(req: Request, { params }: Params) {
-  const org = await requireAuth(req)
-  const existing = await fetchConfig(params.id, org.id)
+  return withAuth(req, async (_req, org) => {
+    const existing = await fetchConfig(params.id, org.id)
   if (!existing) return notFound('Notification config not found')
 
   const { error } = await supabase
@@ -59,6 +60,7 @@ export async function DELETE(req: Request, { params }: Params) {
     .eq('id', params.id)
     .eq('org_id', org.id)
 
-  if (error) return serverError('Failed to delete notification config')
-  return ok({ deleted: true })
+    if (error) return serverError('Failed to delete notification config')
+    return ok({ deleted: true })
+  })
 }

@@ -1,5 +1,5 @@
 import { ok, badRequest, notFound, serverError } from '../../../../../lib/api-response'
-import { requireAuth } from '../../../../../lib/auth'
+import { withAuth } from '../../../../../lib/auth'
 import { supabase } from '../../../../../lib/supabase'
 
 const DRIFT_SELECT = `
@@ -16,16 +16,15 @@ const DRIFT_SELECT = `
   pr_url,
   resolved_at,
   created_at,
-  scans!inner(
+  scans(
     project_id,
-    scan_started_at:started_at,
-    projects!inner(org_id)
+    scan_started_at:started_at
   )
 `
 
 function flattenDrift(row: Record<string, any>): Record<string, any> {
   const scan = Array.isArray(row.scans) ? row.scans[0] : row.scans
-  const { scans, ...drift } = row
+  const { scans: _, ...drift } = row
 
   return {
     ...drift,
@@ -41,32 +40,37 @@ type RouteContext = {
 }
 
 async function fetchDriftForOrg(id: string, orgId: string) {
-  const { data, error } = await supabase
-    .from('drifts')
-    .select(DRIFT_SELECT)
-    .eq('id', id)
-    .eq('scans.projects.org_id', orgId)
-    .maybeSingle()
+  const { data: projects } = await supabase.from('projects').select('id').eq('org_id', orgId)
+  const projectIds = projects?.map((p) => p.id) ?? []
+
+  if (projectIds.length === 0) return null
+
+  const { data: scans } = await supabase.from('scans').select('id').in('project_id', projectIds)
+  const scanIds = scans?.map((s) => s.id) ?? []
+
+  if (scanIds.length === 0) return null
+
+  const { data, error } = await supabase.from('drifts').select(DRIFT_SELECT).eq('id', id).in('scan_id', scanIds).maybeSingle()
 
   if (error || !data) return null
   return flattenDrift(data)
 }
 
 export async function GET(req: Request, { params }: RouteContext) {
-  const org = await requireAuth(req)
-  const drift = await fetchDriftForOrg(params.id, org.id)
+  return withAuth(req, async (_req, org) => {
+    const drift = await fetchDriftForOrg(params.id, org.id)
 
-  if (!drift) {
-    return notFound('Drift not found')
-  }
+    if (!drift) {
+      return notFound('Drift not found')
+    }
 
-  return ok(drift)
+    return ok(drift)
+  })
 }
 
 export async function PATCH(req: Request, { params }: RouteContext) {
-  const org = await requireAuth(req)
-
-  let body: { resolved?: unknown }
+  return withAuth(req, async (req, org) => {
+    let body: { resolved?: unknown }
   try {
     const parsed = await req.json()
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -81,25 +85,32 @@ export async function PATCH(req: Request, { params }: RouteContext) {
     return badRequest('resolved must be a boolean')
   }
 
-  const drift = await fetchDriftForOrg(params.id, org.id)
-  if (!drift) {
-    return notFound('Drift not found')
-  }
+    const drift = await fetchDriftForOrg(params.id, org.id)
+    if (!drift) {
+      return notFound('Drift not found')
+    }
 
-  const { error: updateError } = await supabase
-    .from('drifts')
-    .update({ resolved_at: body.resolved ? new Date().toISOString() : null })
-    .eq('id', params.id)
-    .eq('scan_id', drift.scan_id)
+    // Re-verify ownership by ensuring scan_id belongs to the org's projects
+    const { data: orgProjects } = await supabase.from('projects').select('id').eq('org_id', org.id)
+    const orgProjectIds = orgProjects?.map((p) => p.id) ?? []
+    const { data: orgScans } = await supabase.from('scans').select('id').in('project_id', orgProjectIds)
+    const orgScanIds = orgScans?.map((s) => s.id) ?? []
 
-  if (updateError) {
-    return serverError('Failed to update drift')
-  }
+    const { error: updateError } = await supabase
+      .from('drifts')
+      .update({ resolved_at: body.resolved ? new Date().toISOString() : null })
+      .eq('id', params.id)
+      .in('scan_id', orgScanIds)
 
-  const updatedDrift = await fetchDriftForOrg(params.id, org.id)
-  if (!updatedDrift) {
-    return notFound('Drift not found')
-  }
+    if (updateError) {
+      return serverError('Failed to update drift')
+    }
 
-  return ok(updatedDrift)
+    const updatedDrift = await fetchDriftForOrg(params.id, org.id)
+    if (!updatedDrift) {
+      return notFound('Drift not found')
+    }
+
+    return ok(updatedDrift)
+  })
 }

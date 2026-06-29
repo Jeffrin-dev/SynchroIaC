@@ -3,16 +3,16 @@ declare module '@supabase/ssr' {
 
   type CookieOptions = Record<string, unknown>
 
-  export function createBrowserClient(supabaseUrl: string, supabaseKey: string): SupabaseClient
+  export function createBrowserClient(_supabaseUrl: string, _supabaseKey: string): SupabaseClient
 
   export function createServerClient(
-    supabaseUrl: string,
-    supabaseKey: string,
-    options: {
+    _supabaseUrl: string,
+    _supabaseKey: string,
+    _options: {
       cookies: {
-        get(name: string): string | undefined
-        set(name: string, value: string, options: CookieOptions): void
-        remove(name: string, options: CookieOptions): void
+        get(_name: string): string | undefined
+        set(_name: string, _value: string, _options: CookieOptions): void
+        remove(_name: string, _options: CookieOptions): void
       }
     }
   ): SupabaseClient

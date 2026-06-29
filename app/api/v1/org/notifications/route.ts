@@ -1,5 +1,5 @@
 import { ok, created, badRequest, serverError } from '../../../../../lib/api-response'
-import { requireAuth } from '../../../../../lib/auth'
+import { withAuth } from '../../../../../lib/auth'
 import { supabase } from '../../../../../lib/supabase'
 
 const TYPES = new Set(['email', 'slack'])
@@ -36,19 +36,20 @@ function validateConfig(type: string, config: unknown) {
 }
 
 export async function GET(req: Request) {
-  const org = await requireAuth(req)
-  const { data, error } = await supabase
+  return withAuth(req, async (_req, org) => {
+    const { data, error } = await supabase
     .from('notification_configs')
-    .select('*')
+    .select('id, type, config, enabled, created_at')
     .eq('org_id', org.id)
     .order('created_at', { ascending: false })
 
-  if (error) return serverError('Failed to fetch notification configs')
-  return ok({ notification_configs: data ?? [] })
+    if (error) return serverError('Failed to fetch notification configs')
+    return ok({ notification_configs: data ?? [] })
+  })
 }
 
 export async function POST(req: Request) {
-  const org = await requireAuth(req)
+  return withAuth(req, async (req, org) => {
   const { body, error: bodyError } = await parseJsonBody(req)
   if (bodyError || !body) return badRequest(bodyError ?? 'Invalid request body')
 
@@ -70,9 +71,10 @@ export async function POST(req: Request) {
   const { data, error } = await supabase
     .from('notification_configs')
     .insert({ org_id: org.id, type: body.type, config: body.config, enabled: true })
-    .select('*')
+    .select('id, type, config, enabled, created_at')
     .single()
 
-  if (error || !data) return serverError('Failed to create notification config')
-  return created(data)
+    if (error || !data) return serverError('Failed to create notification config')
+    return created(data)
+  })
 }

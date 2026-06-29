@@ -30,7 +30,11 @@ export async function verifyPaddleWebhook(req: Request): Promise<any> {
   const computedBuffer = Buffer.from(computed, 'hex')
   const receivedBuffer = Buffer.from(h1, 'hex')
 
-  if (computedBuffer.length !== receivedBuffer.length || !crypto.timingSafeEqual(computedBuffer, receivedBuffer)) {
+  if (computedBuffer.length !== receivedBuffer.length) {
+    throw new Error('Invalid Paddle webhook signature')
+  }
+
+  if (!crypto.timingSafeEqual(computedBuffer, receivedBuffer)) {
     throw new Error('Invalid Paddle webhook signature')
   }
 

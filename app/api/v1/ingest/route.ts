@@ -1,5 +1,5 @@
 import { badRequest, created, notFound, serverError, tooManyRequests } from '../../../../lib/api-response'
-import { requireAuth } from '../../../../lib/auth'
+import { withAuth } from '../../../../lib/auth'
 import { checkRateLimit } from '../../../../lib/ratelimit'
 import { sendDriftAlert } from '../../../../lib/resend'
 import { supabase } from '../../../../lib/supabase'
@@ -35,8 +35,8 @@ function validateSummary(summary: unknown): SummaryPayload | string {
 }
 
 export async function POST(req: Request) {
-  const org = await requireAuth(req)
-  const rateLimit = checkRateLimit(`ingest:${org.id}`, 60, 60_000)
+  return withAuth(req, async (req, org) => {
+    const rateLimit = checkRateLimit(`ingest:${org.id}`, 60, 60_000)
   if (!rateLimit.allowed) {
     return tooManyRequests(rateLimit.resetAt - Date.now())
   }
@@ -144,11 +144,12 @@ export async function POST(req: Request) {
   }
 
   if (summary.critical > 0 || summary.high > 0) {
-    void (async () => {
+    // Floating promise for alerts - wrapped in try/catch to prevent process crash
+    (async () => {
       try {
         const { data: configs, error: configsError } = await supabase
           .from('notification_configs')
-          .select('*')
+          .select('id, type, config, enabled')
           .eq('org_id', org.id)
           .eq('enabled', true)
 
@@ -194,9 +195,10 @@ export async function POST(req: Request) {
     })()
   }
 
-  return created({
-    scan_id: scanId,
-    drifts_recorded: body.drifts.length,
-    status: 'completed'
+    return created({
+      scan_id: scanId,
+      drifts_recorded: body.drifts.length,
+      status: 'completed'
+    })
   })
 }

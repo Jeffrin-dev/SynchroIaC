@@ -98,5 +98,9 @@ export async function explainDrift(input: DriftExplainInput): Promise<string> {
     choices?: Array<{ message?: { content?: string } }>
   }
 
-  return (data.choices?.[0]?.message?.content ?? '').trim()
+  if (!data.choices || data.choices.length === 0) {
+    throw new Error('OpenRouter returned an empty choices array')
+  }
+
+  return (data.choices[0]?.message?.content ?? '').trim()
 }

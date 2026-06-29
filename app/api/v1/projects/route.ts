@@ -1,5 +1,5 @@
 import { ok, created, badRequest, paymentRequired, serverError } from '../../../../lib/api-response'
-import { requireAuth } from '../../../../lib/auth'
+import { withAuth } from '../../../../lib/auth'
 import { supabase } from '../../../../lib/supabase'
 
 const DEFAULT_TERRAFORM_PATH = './terraform'
@@ -105,11 +105,10 @@ async function getProjectScanStats(projectIds: string[]) {
 }
 
 export async function GET(req: Request) {
-  const org = await requireAuth(req)
-
-  const { data: projects, error, count } = await supabase
+  return withAuth(req, async (_req, org) => {
+    const { data: projects, error, count } = await supabase
     .from('projects')
-    .select('*', { count: 'exact' })
+    .select('id, name, repo_url, terraform_path, aws_region, created_at', { count: 'exact' })
     .eq('org_id', org.id)
     .order('created_at', { ascending: false })
 
@@ -126,15 +125,16 @@ export async function GET(req: Request) {
       latest_scan_total_drifts: stats.get(project.id as string)?.latest_scan_total_drifts ?? null
     }))
 
-    return ok({ projects: projectsWithStats, total: count ?? projectsWithStats.length })
-  } catch {
-    return serverError('Failed to fetch project scan stats')
-  }
+      return ok({ projects: projectsWithStats, total: count ?? projectsWithStats.length })
+    } catch {
+      return serverError('Failed to fetch project scan stats')
+    }
+  })
 }
 
 export async function POST(req: Request) {
-  const org = await requireAuth(req)
-  const { body, error: bodyError } = await parseJsonBody(req)
+  return withAuth(req, async (req, org) => {
+    const { body, error: bodyError } = await parseJsonBody(req)
 
   if (bodyError || !body) {
     return badRequest(bodyError ?? 'Invalid request body')
@@ -174,12 +174,13 @@ export async function POST(req: Request) {
   const { data, error } = await supabase
     .from('projects')
     .insert(project)
-    .select('*')
+    .select('id, name, repo_url, terraform_path, aws_region, created_at')
     .single()
 
-  if (error) {
-    return serverError('Failed to create project')
-  }
+    if (error) {
+      return serverError('Failed to create project')
+    }
 
-  return created(data)
+    return created(data)
+  })
 }
