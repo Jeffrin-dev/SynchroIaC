@@ -65,7 +65,7 @@ export async function explainDrift(input: DriftExplainInput): Promise<string> {
         'X-Title': 'SynchroIaC'
       },
       body: JSON.stringify({
-        model: 'openai/gpt-4o-mini-search-preview:free',
+        model: "meta-llama/llama-3.1-8b-instruct:free",
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: buildUserPrompt(input) }
