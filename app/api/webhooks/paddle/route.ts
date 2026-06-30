@@ -49,25 +49,27 @@ export async function POST(req: Request) {
     return badRequest(message)
   }
 
-  const eventType = event.event_type
-  if (!HANDLED_EVENT_TYPES.has(eventType)) {
-    return ok({ received: true })
-  }
+  // From this point on, the signature is valid. We should return 200 even if internal logic fails
+  // to avoid Paddle retrying the same failing webhook indefinitely.
+  try {
+    const eventType = event.event_type
+    if (!eventType || !HANDLED_EVENT_TYPES.has(eventType)) {
+      return ok({ received: true })
+    }
 
-  const subscription = extractPaddleSubscriptionData(event)
-  const orgId = await findOrganizationId(subscription.subscriptionId, event.data?.custom_data?.org_id)
+    const subscription = extractPaddleSubscriptionData(event)
+    const orgId = await findOrganizationId(subscription.subscriptionId, event.data?.custom_data?.org_id)
 
-  if (!orgId) {
-    console.warn('Paddle webhook organization not found', {
-      eventType,
-      subscriptionId: subscription.subscriptionId,
-      customOrgId: event.data?.custom_data?.org_id
-    })
-    return ok({ received: true })
-  }
+    if (!orgId) {
+      console.warn('Paddle webhook organization not found', {
+        eventType,
+        subscriptionId: subscription.subscriptionId,
+        customOrgId: event.data?.custom_data?.org_id
+      })
+      return ok({ received: true })
+    }
 
-  if (eventType === 'subscription.canceled') {
-    try {
+    if (eventType === 'subscription.canceled') {
       const { error } = await supabase
         .from('organizations')
         .update({
@@ -79,14 +81,9 @@ export async function POST(req: Request) {
       if (error) {
         console.error('Failed to clear canceled Paddle subscription', error)
       }
-    } catch (error) {
-      console.error('Unexpected error clearing canceled Paddle subscription', error)
+      return ok({ received: true })
     }
 
-    return ok({ received: true })
-  }
-
-  try {
     const { error } = await supabase
       .from('organizations')
       .update({
@@ -99,7 +96,7 @@ export async function POST(req: Request) {
       console.error('Failed to update Paddle subscription', error)
     }
   } catch (error) {
-    console.error('Unexpected error updating Paddle subscription', error)
+    console.error('Unexpected error processing Paddle webhook', error)
   }
 
   return ok({ received: true })

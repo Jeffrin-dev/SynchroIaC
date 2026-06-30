@@ -1,8 +1,9 @@
-import { badGateway, notFound, ok, paymentRequired, tooManyRequests } from '../../../../../../lib/api-response'
+import { badGateway, badRequest, notFound, ok, paymentRequired, tooManyRequests } from '../../../../../../lib/api-response'
 import { withAuth } from '../../../../../../lib/auth'
 import { explainDrift, type DriftExplainInput } from '../../../../../../lib/openrouter'
 import { checkRateLimit } from '../../../../../../lib/ratelimit'
 import { supabase } from '../../../../../../lib/supabase'
+import { isValidUuid } from '../../../../../../lib/utils'
 
 const FREE_PLAN_MONTHLY_EXPLANATION_LIMIT = 10
 
@@ -19,6 +20,9 @@ const DRIFT_SELECT = `
   explanation,
   created_at
 `
+
+// Simple in-memory set to prevent multiple simultaneous AI calls for the same drift ID.
+const processingExplanations = new Set<string>()
 
 type RouteContext = {
   params: {
@@ -109,6 +113,10 @@ async function countMonthlyExplanations(orgId: string): Promise<number> {
 
 export async function POST(req: Request, { params }: RouteContext) {
   return withAuth(req, async (req, org) => {
+    if (!isValidUuid(params.id)) {
+      return badRequest('Invalid drift ID format')
+    }
+
     const rateLimit = checkRateLimit(`explain:${org.id}`, 20, 60_000)
     if (!rateLimit.allowed) {
       return tooManyRequests(rateLimit.resetAt - Date.now())
@@ -132,12 +140,20 @@ export async function POST(req: Request, { params }: RouteContext) {
     }
   }
 
+  if (processingExplanations.has(drift.id)) {
+    return tooManyRequests(5000)
+  }
+
+  processingExplanations.add(drift.id)
+
   let explanation: string
   try {
     explanation = await explainDrift(buildExplainInput(drift))
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     return badGateway('AI explanation failed', message)
+  } finally {
+    processingExplanations.delete(drift.id)
   }
 
     const { error: updateError } = await supabase.from('drifts').update({ explanation }).eq('id', drift.id)

@@ -28,6 +28,14 @@ export default function NewProjectForm() {
     setIsSubmitting(true)
 
     const formData = new FormData(event.currentTarget)
+    const name = (formData.get('name') as string)?.trim()
+
+    if (!name) {
+      setError('Project name is required')
+      setIsSubmitting(false)
+      return
+    }
+
     const response = await fetch('/api/v1/projects', {
       method: 'POST',
       headers: {
@@ -35,9 +43,9 @@ export default function NewProjectForm() {
         'x-api-key': process.env.NEXT_PUBLIC_DASHBOARD_API_KEY ?? ''
       },
       body: JSON.stringify({
-        name: formData.get('name'),
-        repo_url: formData.get('repo_url') || undefined,
-        terraform_path: formData.get('terraform_path') || undefined,
+        name,
+        repo_url: (formData.get('repo_url') as string)?.trim() || undefined,
+        terraform_path: (formData.get('terraform_path') as string)?.trim() || undefined,
         aws_region: formData.get('aws_region') || undefined
       })
     })

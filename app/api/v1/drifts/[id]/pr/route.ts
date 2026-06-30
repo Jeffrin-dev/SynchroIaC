@@ -1,8 +1,9 @@
-import { badGateway, created, notFound, ok, paymentRequired, tooManyRequests } from '../../../../../../lib/api-response'
+import { badGateway, badRequest, created, notFound, ok, paymentRequired, tooManyRequests } from '../../../../../../lib/api-response'
 import { withAuth } from '../../../../../../lib/auth'
 import { createDriftFixPR, type CreatePRInput } from '../../../../../../lib/github'
 import { checkRateLimit } from '../../../../../../lib/ratelimit'
 import { supabase } from '../../../../../../lib/supabase'
+import { isValidUuid } from '../../../../../../lib/utils'
 
 const DRIFT_SELECT = `
   id,
@@ -93,6 +94,10 @@ function buildCreatePRInput(drift: DriftRecord): CreatePRInput {
 
 export async function POST(req: Request, { params }: RouteContext) {
   return withAuth(req, async (req, org) => {
+    if (!isValidUuid(params.id)) {
+      return badRequest('Invalid drift ID format')
+    }
+
     const rateLimit = checkRateLimit(`pr:${org.id}`, 10, 60_000)
     if (!rateLimit.allowed) {
       return tooManyRequests(rateLimit.resetAt - Date.now())
@@ -104,11 +109,21 @@ export async function POST(req: Request, { params }: RouteContext) {
       return notFound('Drift not found')
     }
 
-    if (!drift.repo_url?.trim()) {
+    const repoUrl = drift.repo_url?.trim()
+    if (!repoUrl) {
       return new Response(JSON.stringify({ error: 'No repository URL configured for this project', details: 'Set repo_url on the project before generating fix PRs' }), {
         status: 422,
         headers: { 'Content-Type': 'application/json' }
       })
+    }
+
+    try {
+      const url = new URL(repoUrl)
+      if (url.hostname !== 'github.com') {
+        return badRequest('Only GitHub repositories are supported for PR generation')
+      }
+    } catch {
+      return badRequest('Invalid repository URL configured for this project')
     }
 
     const existingPrUrl = drift.pr_url?.trim()
