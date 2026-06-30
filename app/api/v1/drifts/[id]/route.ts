@@ -1,6 +1,7 @@
 import { ok, badRequest, notFound, serverError } from '../../../../../lib/api-response'
 import { withAuth } from '../../../../../lib/auth'
 import { supabase } from '../../../../../lib/supabase'
+import { isValidUuid } from '../../../../../lib/utils'
 
 const DRIFT_SELECT = `
   id,
@@ -58,6 +59,10 @@ async function fetchDriftForOrg(id: string, orgId: string) {
 
 export async function GET(req: Request, { params }: RouteContext) {
   return withAuth(req, async (_req, org) => {
+    if (!isValidUuid(params.id)) {
+      return badRequest('Invalid drift ID format')
+    }
+
     const drift = await fetchDriftForOrg(params.id, org.id)
 
     if (!drift) {
@@ -70,20 +75,24 @@ export async function GET(req: Request, { params }: RouteContext) {
 
 export async function PATCH(req: Request, { params }: RouteContext) {
   return withAuth(req, async (req, org) => {
-    let body: { resolved?: unknown }
-  try {
-    const parsed = await req.json()
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return badRequest('body is missing or invalid')
+    if (!isValidUuid(params.id)) {
+      return badRequest('Invalid drift ID format')
     }
-    body = parsed as { resolved?: unknown }
-  } catch {
-    return badRequest('Invalid JSON body')
-  }
 
-  if (typeof body.resolved !== 'boolean') {
-    return badRequest('resolved must be a boolean')
-  }
+    let body: { resolved?: unknown }
+    try {
+      const parsed = await req.json()
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return badRequest('body must be a JSON object')
+      }
+      body = parsed as { resolved?: unknown }
+    } catch {
+      return badRequest('Invalid or empty JSON body')
+    }
+
+    if (body.resolved === undefined || typeof body.resolved !== 'boolean') {
+      return badRequest('resolved field is required and must be a boolean')
+    }
 
     const drift = await fetchDriftForOrg(params.id, org.id)
     if (!drift) {

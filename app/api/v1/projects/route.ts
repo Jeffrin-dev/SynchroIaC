@@ -30,7 +30,7 @@ function validateName(value: unknown, required: boolean) {
     return 'name must be a non-empty string'
   }
 
-  if (value.length > 100) {
+  if (value.trim().length > 100) {
     return 'name must be 100 characters or fewer'
   }
 
@@ -41,6 +41,17 @@ function validateOptionalProjectFields(body: ProjectBody) {
   if (body.repo_url !== undefined) {
     if (typeof body.repo_url !== 'string' || !body.repo_url.startsWith('https://github.com/')) {
       return 'repo_url must start with https://github.com/'
+    }
+    try {
+      const url = new URL(body.repo_url)
+      if (url.hostname !== 'github.com' || url.protocol !== 'https:') {
+        return 'repo_url must be a valid https://github.com URL'
+      }
+      if (url.search || url.hash || url.username || url.password) {
+        return 'repo_url must not contain query parameters, hashes, or credentials'
+      }
+    } catch {
+      return 'repo_url must be a valid URL'
     }
   }
 

@@ -3,6 +3,7 @@ import { withAuth } from '../../../../lib/auth'
 import { checkRateLimit } from '../../../../lib/ratelimit'
 import { sendDriftAlert } from '../../../../lib/resend'
 import { supabase } from '../../../../lib/supabase'
+import { UUID_REGEX } from '../../../../lib/utils'
 
 type SummaryPayload = {
   total: number
@@ -26,8 +27,8 @@ function validateSummary(summary: unknown): SummaryPayload | string {
 
   const candidate = summary as Record<string, unknown>
   for (const field of ['total', 'critical', 'high', 'medium', 'low'] as const) {
-    if (typeof candidate[field] !== 'number' || !Number.isFinite(candidate[field])) {
-      return `summary.${field} is missing or invalid`
+    if (typeof candidate[field] !== 'number' || !Number.isFinite(candidate[field]) || candidate[field] < 0) {
+      return `summary.${field} must be a non-negative number`
     }
   }
 
@@ -37,28 +38,36 @@ function validateSummary(summary: unknown): SummaryPayload | string {
 export async function POST(req: Request) {
   return withAuth(req, async (req, org) => {
     const rateLimit = checkRateLimit(`ingest:${org.id}`, 60, 60_000)
-  if (!rateLimit.allowed) {
-    return tooManyRequests(rateLimit.resetAt - Date.now())
-  }
-
-  let body: IngestPayload
-  try {
-    const parsed = await req.json()
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return badRequest('body is missing or invalid')
+    if (!rateLimit.allowed) {
+      return tooManyRequests(rateLimit.resetAt - Date.now())
     }
-    body = parsed as IngestPayload
-  } catch {
-    return badRequest('Invalid JSON body')
-  }
 
-  if (typeof body.project_id !== 'string' || body.project_id.trim() === '') {
-    return badRequest('project_id is missing or invalid')
-  }
+    let body: IngestPayload
+    try {
+      if (!req.headers.get('content-type')?.includes('application/json')) {
+        return badRequest('Content-Type must be application/json')
+      }
 
-  if (!Array.isArray(body.drifts)) {
-    return badRequest('drifts is missing or invalid')
-  }
+      const parsed = await req.json()
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return badRequest('body must be a JSON object')
+      }
+      body = parsed as IngestPayload
+    } catch {
+      return badRequest('Invalid or empty JSON body')
+    }
+
+    if (typeof body.project_id !== 'string' || !UUID_REGEX.test(body.project_id)) {
+      return badRequest('project_id must be a valid UUID')
+    }
+
+    if (!Array.isArray(body.drifts)) {
+      return badRequest('drifts must be an array')
+    }
+
+    if (body.drifts.length > 1000) {
+      return badRequest('Maximum 1000 drifts allowed per ingestion')
+    }
 
   const summary = validateSummary(body.summary)
   if (typeof summary === 'string') {

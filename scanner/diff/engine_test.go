@@ -124,3 +124,42 @@ func TestScanSummary(t *testing.T) {
 		t.Fatalf("ScanSummary() = (%d, %d, %d, %d, %d), want (6, 1, 2, 1, 2)", total, critical, high, medium, low)
 	}
 }
+
+func TestDetectDrift_EdgeCases(t *testing.T) {
+	t.Run("empty inputs", func(t *testing.T) {
+		drifts := DetectDrift([]types.ResourceState{}, []types.ResourceState{})
+		if len(drifts) != 0 {
+			t.Errorf("expected 0 drifts, got %d", len(drifts))
+		}
+	})
+
+	t.Run("mismatched resource type for same ID", func(t *testing.T) {
+		desired := []types.ResourceState{
+			{ResourceType: "aws_instance", ResourceID: "id-1", Attributes: map[string]string{"foo": "bar"}},
+		}
+		actual := []types.ResourceState{
+			{ResourceType: "aws_s3_bucket", ResourceID: "id-1", Attributes: map[string]string{"foo": "bar"}},
+		}
+
+		drifts := DetectDrift(desired, actual)
+		// Should be 2 drifts: id-1 (instance) is missing, id-1 (bucket) is extra.
+		if len(drifts) != 2 {
+			t.Errorf("expected 2 drifts, got %d", len(drifts))
+		}
+
+		missing := false
+		extra := false
+		for _, d := range drifts {
+			if d.DriftType == "missing" && d.ResourceType == "aws_instance" {
+				missing = true
+			}
+			if d.DriftType == "extra" && d.ResourceType == "aws_s3_bucket" {
+				extra = true
+			}
+		}
+
+		if !missing || !extra {
+			t.Error("expected both missing and extra drifts for mismatched type")
+		}
+	})
+}

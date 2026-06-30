@@ -1,6 +1,7 @@
 import { ok, badRequest, serverError } from '../../../../lib/api-response'
 import { withAuth } from '../../../../lib/auth'
 import { supabase } from '../../../../lib/supabase'
+import { isValidUuid } from '../../../../lib/utils'
 
 const RISK_LEVELS = new Set(['low', 'medium', 'high', 'critical'])
 const DRIFT_TYPES = new Set(['configuration', 'missing', 'extra', 'security'])
@@ -91,17 +92,24 @@ export async function GET(req: Request) {
   return withAuth(req, async (req, org) => {
     const params = new URL(req.url).searchParams
 
-    const scanIds = await getOrgScanIds(org.id, params.get('project_id'))
+    const projectId = params.get('project_id')
+    if (projectId && !isValidUuid(projectId)) {
+      return badRequest('project_id must be a valid UUID')
+    }
+
+    const scanIds = await getOrgScanIds(org.id, projectId)
   if (scanIds.length === 0) {
     return ok({ drifts: [], total: 0, limit: 50, offset: 0 })
   }
 
-  const limit = parseIntegerParam(params.get('limit'), 50, (value) => value >= 1 && value <= 100)
+  const limitStr = params.get('limit')
+  const limit = parseIntegerParam(limitStr, 50, (value) => value >= 1 && value <= 100)
   if (limit === null) {
     return badRequest('limit must be an integer between 1 and 100')
   }
 
-  const offset = parseIntegerParam(params.get('offset'), 0, (value) => value >= 0)
+  const offsetStr = params.get('offset')
+  const offset = parseIntegerParam(offsetStr, 0, (value) => value >= 0)
   if (offset === null) {
     return badRequest('offset must be an integer greater than or equal to 0')
   }

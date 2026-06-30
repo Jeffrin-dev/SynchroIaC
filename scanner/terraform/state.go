@@ -29,18 +29,30 @@ type tfInstance struct {
 
 // ParseStateFile reads a terraform.tfstate JSON file and returns managed resources.
 func ParseStateFile(path string) ([]types.ResourceState, error) {
-	data, err := os.ReadFile(path)
+	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("terraform state file not found at path: %s", path)
 		}
+		return nil, err
+	}
 
+	if info.Size() == 0 {
+		return nil, fmt.Errorf("terraform state file is empty: %s", path)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
 		return nil, err
 	}
 
 	var state tfState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal state file: %w", err)
+	}
+
+	if state.FormatVersion == "" {
+		return nil, fmt.Errorf("invalid terraform state: format_version is missing")
 	}
 
 	idCounts := map[string]int{}
