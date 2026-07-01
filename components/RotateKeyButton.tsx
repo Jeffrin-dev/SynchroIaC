@@ -1,14 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-
-const API_KEY = process.env.NEXT_PUBLIC_DASHBOARD_API_KEY ?? ''
+import { useRouter } from 'next/navigation'
 
 export default function RotateKeyButton() {
   const [loading, setLoading] = useState(false)
   const [newKey, setNewKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confirmed, setConfirmed] = useState(false)
+  const router = useRouter()
 
   async function rotate() {
     if (!window.confirm('This will invalidate your current API key. All scanners using the old key will stop working until updated. Continue?')) return
@@ -16,7 +16,14 @@ export default function RotateKeyButton() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/v1/org/rotate-key', { method: 'POST', headers: { 'x-api-key': API_KEY } })
+      const keyRes = await fetch('/api/v1/auth/session-key')
+      if (keyRes.status === 401) {
+        router.push('/login')
+        return
+      }
+      const { api_key } = await keyRes.json()
+
+      const response = await fetch('/api/v1/org/rotate-key', { method: 'POST', headers: { 'x-api-key': api_key } })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error ?? 'Failed to rotate API key')
       setNewKey(data.api_key)

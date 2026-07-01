@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-
-const API_KEY = process.env.NEXT_PUBLIC_DASHBOARD_API_KEY ?? ''
+import { useRouter } from 'next/navigation'
 
 export default function OrgNameForm({ currentName }: { currentName: string }) {
   const [name, setName] = useState(currentName)
@@ -18,13 +17,22 @@ export default function OrgNameForm({ currentName }: { currentName: string }) {
     return () => window.clearTimeout(timer)
   }, [success])
 
+  const router = useRouter()
+
   async function save() {
     setLoading(true)
     setError(null)
     try {
+      const keyRes = await fetch('/api/v1/auth/session-key')
+      if (keyRes.status === 401) {
+        router.push('/login')
+        return
+      }
+      const { api_key } = await keyRes.json()
+
       const response = await fetch('/api/v1/org', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+        headers: { 'Content-Type': 'application/json', 'x-api-key': api_key },
         body: JSON.stringify({ name: value })
       })
       const data = await response.json()

@@ -1,0 +1,13 @@
+-- This migration is intentionally left as a manual step.
+-- To link your original manually-created Supabase Auth user
+-- to the seeded Dev Org, run this in the SQL editor after
+-- finding your user id from auth.users:
+--
+--   SELECT id, email FROM auth.users;
+--
+-- Then run, substituting your actual user id:
+--
+--   INSERT INTO org_members (org_id, user_id, role)
+--   SELECT id, '<your-user-id-here>', 'owner'
+--   FROM organizations WHERE created_via = 'seed'
+--   LIMIT 1;

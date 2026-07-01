@@ -3,10 +3,9 @@ import { headers } from 'next/headers'
 
 type Project = { id: string; name: string; repo_url: string | null; terraform_path: string; aws_region: string }
 
-async function getProject(id: string): Promise<Project | null> {
-  const apiKey = process.env.DASHBOARD_API_KEY
-  if (!apiKey) return null
+import { getDashboardOrgContext } from '../../../../../lib/dashboard-auth'
 
+async function getProject(id: string, apiKey: string): Promise<Project | null> {
   const headerStore = headers()
   const host = headerStore.get('host')
   const protocol = headerStore.get('x-forwarded-proto') ?? 'http'
@@ -19,7 +18,8 @@ async function getProject(id: string): Promise<Project | null> {
 }
 
 export default async function ProjectSettingsPage({ params }: { params: { id: string } }) {
-  const project = await getProject(params.id)
+  const ctx = await getDashboardOrgContext()
+  const project = await getProject(params.id, ctx.apiKey)
 
   if (!project) {
     return (

@@ -31,10 +31,11 @@ function getBaseUrl() {
   return process.env.NEXT_PUBLIC_APP_URL ?? (host ? `${protocol}://${host}` : '')
 }
 
-async function getDrift(id: string): Promise<{ drift: Drift | null; status: number; error: string | null }> {
-  const apiKey = process.env.DASHBOARD_API_KEY
+import { getDashboardOrgContext } from '../../../../lib/dashboard-auth'
+
+async function getDrift(id: string, apiKey: string): Promise<{ drift: Drift | null; status: number; error: string | null }> {
   const baseUrl = getBaseUrl()
-  if (!apiKey || !baseUrl) return { drift: null, status: 500, error: 'Dashboard API is not configured' }
+  if (!baseUrl) return { drift: null, status: 500, error: 'Dashboard API is not configured' }
 
   const response = await fetch(`${baseUrl}/api/v1/drifts/${id}`, {
     headers: { 'x-api-key': apiKey },
@@ -74,7 +75,8 @@ function DetailItem({ label, value }: { label: string; value: React.ReactNode })
 }
 
 export default async function DriftDetailPage({ params }: PageProps) {
-  const { drift, status, error } = await getDrift(params.id)
+  const ctx = await getDashboardOrgContext()
+  const { drift, status, error } = await getDrift(params.id, ctx.apiKey)
 
   if (status === 404) {
     return <section className="space-y-4"><Link href="/dashboard/drifts" className="text-sm font-medium text-indigo-600 hover:text-indigo-700">← Back to drifts</Link><div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm"><h1 className="text-xl font-bold text-gray-900">Drift not found</h1></div></section>

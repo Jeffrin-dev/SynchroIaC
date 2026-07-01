@@ -1,8 +1,7 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
-
-const API_KEY = process.env.NEXT_PUBLIC_DASHBOARD_API_KEY ?? ''
+import { useRouter } from 'next/navigation'
 
 type NotificationConfig = {
   id: string
@@ -19,12 +18,26 @@ export default function NotificationConfigs({ initialConfigs }: { initialConfigs
   const [formValue, setFormValue] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+
+  async function getApiKey() {
+    const keyRes = await fetch('/api/v1/auth/session-key')
+    if (keyRes.status === 401) {
+      router.push('/login')
+      return null
+    }
+    const { api_key } = await keyRes.json()
+    return api_key
+  }
 
   async function toggle(config: NotificationConfig) {
     setError(null)
+    const api_key = await getApiKey()
+    if (!api_key) return
+
     const response = await fetch(`/api/v1/org/notifications/${config.id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': api_key },
       body: JSON.stringify({ enabled: !config.enabled })
     })
     const data = await response.json()
@@ -34,7 +47,10 @@ export default function NotificationConfigs({ initialConfigs }: { initialConfigs
 
   async function remove(config: NotificationConfig) {
     setError(null)
-    const response = await fetch(`/api/v1/org/notifications/${config.id}`, { method: 'DELETE', headers: { 'x-api-key': API_KEY } })
+    const api_key = await getApiKey()
+    if (!api_key) return
+
+    const response = await fetch(`/api/v1/org/notifications/${config.id}`, { method: 'DELETE', headers: { 'x-api-key': api_key } })
     const data = await response.json()
     if (!response.ok) return setError(data.error ?? 'Failed to delete notification')
     setConfigs((items) => items.filter((item) => item.id !== config.id))
@@ -45,9 +61,12 @@ export default function NotificationConfigs({ initialConfigs }: { initialConfigs
     setLoading(true)
     setError(null)
     try {
+      const api_key = await getApiKey()
+      if (!api_key) return
+
       const response = await fetch('/api/v1/org/notifications', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+        headers: { 'Content-Type': 'application/json', 'x-api-key': api_key },
         body: JSON.stringify({ type: formType, config: formType === 'email' ? { email: formValue } : { webhook_url: formValue } })
       })
       const data = await response.json()

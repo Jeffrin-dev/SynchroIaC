@@ -68,10 +68,11 @@ function buildQuery(searchParams: PageProps['searchParams']) {
   return params
 }
 
-async function apiFetch<T>(path: string): Promise<{ data: T | null; error: string | null }> {
-  const apiKey = process.env.DASHBOARD_API_KEY
+import { getDashboardOrgContext } from '../../../lib/dashboard-auth'
+
+async function apiFetch<T>(path: string, apiKey: string): Promise<{ data: T | null; error: string | null }> {
   const baseUrl = getBaseUrl()
-  if (!apiKey || !baseUrl) return { data: null, error: 'Dashboard API is not configured' }
+  if (!baseUrl) return { data: null, error: 'Dashboard API is not configured' }
 
   const response = await fetch(`${baseUrl}${path}`, {
     headers: { 'x-api-key': apiKey },
@@ -113,10 +114,11 @@ function pageHref(searchParams: PageProps['searchParams'], offset: number) {
 }
 
 export default async function DriftsPage({ searchParams }: PageProps) {
+  const ctx = await getDashboardOrgContext()
   const query = buildQuery(searchParams)
   const [{ data: driftData, error }, { data: projectData }] = await Promise.all([
-    apiFetch<DriftsResponse>(`/api/v1/drifts?${query.toString()}`),
-    apiFetch<ProjectsResponse>('/api/v1/projects')
+    apiFetch<DriftsResponse>(`/api/v1/drifts?${query.toString()}`, ctx.apiKey),
+    apiFetch<ProjectsResponse>('/api/v1/projects', ctx.apiKey)
   ])
 
   const projects = projectData?.projects ?? []

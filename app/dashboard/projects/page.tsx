@@ -15,10 +15,9 @@ type ProjectsResponse = {
   projects: Project[]
 }
 
-async function getProjects(): Promise<Project[] | null> {
-  const apiKey = process.env.DASHBOARD_API_KEY
-  if (!apiKey) return null
+import { getDashboardOrgContext } from '../../../lib/dashboard-auth'
 
+async function getProjects(apiKey: string): Promise<Project[] | null> {
   const headerStore = headers()
   const host = headerStore.get('host')
   const protocol = headerStore.get('x-forwarded-proto') ?? 'http'
@@ -38,7 +37,8 @@ async function getProjects(): Promise<Project[] | null> {
 }
 
 export default async function ProjectsPage() {
-  const projects = await getProjects()
+  const ctx = await getDashboardOrgContext()
+  const projects = await getProjects(ctx.apiKey)
 
   if (!projects) {
     return (

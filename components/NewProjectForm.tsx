@@ -36,11 +36,18 @@ export default function NewProjectForm() {
       return
     }
 
+    const keyRes = await fetch('/api/v1/auth/session-key')
+    if (keyRes.status === 401) {
+      router.push('/login')
+      return
+    }
+    const { api_key } = await keyRes.json()
+
     const response = await fetch('/api/v1/projects', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.NEXT_PUBLIC_DASHBOARD_API_KEY ?? ''
+        'x-api-key': api_key
       },
       body: JSON.stringify({
         name,

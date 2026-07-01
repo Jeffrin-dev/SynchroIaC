@@ -15,10 +15,9 @@ const planLimits = {
   team: 'Team: unlimited everything'
 }
 
-async function getOrg(): Promise<OrgResponse | null> {
-  const apiKey = process.env.DASHBOARD_API_KEY
-  if (!apiKey) return null
+import { getDashboardOrgContext } from '../../../lib/dashboard-auth'
 
+async function getOrg(apiKey: string): Promise<OrgResponse | null> {
   const headerStore = headers()
   const host = headerStore.get('host')
   const protocol = headerStore.get('x-forwarded-proto') ?? 'http'
@@ -31,7 +30,8 @@ async function getOrg(): Promise<OrgResponse | null> {
 }
 
 export default async function SettingsPage() {
-  const data = await getOrg()
+  const ctx = await getDashboardOrgContext()
+  const data = await getOrg(ctx.apiKey)
 
   if (!data) {
     return (
@@ -45,6 +45,8 @@ export default async function SettingsPage() {
   return (
     <section className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+
+      <p className="text-sm text-gray-500">Signed in as {ctx.userEmail}</p>
 
       <article className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-gray-900">Organization Name</h2>

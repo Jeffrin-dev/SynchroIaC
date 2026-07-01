@@ -1,31 +1,34 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 type ExplainButtonProps = {
   driftId: string
   existingExplanation: string | null
 }
 
-function apiKeyHeaders() {
-  return {
-    'x-api-key': process.env.NEXT_PUBLIC_DASHBOARD_API_KEY ?? ''
-  }
-}
-
 export function ExplainButton({ driftId, existingExplanation }: ExplainButtonProps) {
   const [loading, setLoading] = useState(false)
   const [explanation, setExplanation] = useState<string | null>(existingExplanation)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   async function generateExplanation() {
     setLoading(true)
     setError(null)
 
     try {
+      const keyRes = await fetch('/api/v1/auth/session-key')
+      if (keyRes.status === 401) {
+        router.push('/login')
+        return
+      }
+      const { api_key } = await keyRes.json()
+
       const response = await fetch(`/api/v1/drifts/${driftId}/explain`, {
         method: 'POST',
-        headers: apiKeyHeaders()
+        headers: { 'x-api-key': api_key }
       })
       const data = await response.json().catch(() => ({})) as { explanation?: string; error?: string; detail?: string }
 

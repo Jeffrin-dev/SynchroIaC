@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 type PRButtonProps = {
   driftId: string
@@ -11,15 +12,23 @@ export function PRButton({ driftId, existingPrUrl }: PRButtonProps) {
   const [loading, setLoading] = useState(false)
   const [prUrl, setPrUrl] = useState<string | null>(existingPrUrl)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   async function generatePr() {
     setLoading(true)
     setError(null)
 
     try {
+      const keyRes = await fetch('/api/v1/auth/session-key')
+      if (keyRes.status === 401) {
+        router.push('/login')
+        return
+      }
+      const { api_key } = await keyRes.json()
+
       const response = await fetch(`/api/v1/drifts/${driftId}/pr`, {
         method: 'POST',
-        headers: { 'x-api-key': process.env.NEXT_PUBLIC_DASHBOARD_API_KEY ?? '' }
+        headers: { 'x-api-key': api_key }
       })
       const data = await response.json().catch(() => ({})) as { pr_url?: string; error?: string; detail?: string }
 
