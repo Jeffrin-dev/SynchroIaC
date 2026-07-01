@@ -175,22 +175,24 @@ export default async function DriftsPage({ searchParams }: PageProps) {
         {drifts.length === 0 ? (
           <div className="p-10 text-center text-gray-500"><span className="mx-auto mb-3 block text-3xl text-green-600">✓</span>{activeResolved === 'true' ? 'No resolved drifts found.' : 'No drift detected'}</div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"><tr><th className="px-4 py-3">Risk</th><th className="px-4 py-3">Resource</th><th className="px-4 py-3">Attribute</th><th className="px-4 py-3">Change</th><th className="px-4 py-3">Project</th><th className="px-4 py-3">Detected</th><th className="px-4 py-3">Actions</th></tr></thead>
-            <tbody className="divide-y divide-gray-200">
-              {drifts.map((drift) => (
-                <tr key={drift.id}>
-                  <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${riskClasses(drift.risk_level)}`}>{drift.risk_level ?? 'low'}</span></td>
-                  <td className="px-4 py-3 text-gray-900">{truncate(`${drift.resource_type ?? 'unknown'} / ${drift.resource_id ?? 'unknown'}`, 40)}</td>
-                  <td className="px-4 py-3 text-gray-600">{drift.attribute ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-600">{truncate(stringifyValue(drift.desired_value), 30)} → {truncate(stringifyValue(drift.actual_value), 30)}</td>
-                  <td className="px-4 py-3 text-gray-600">{drift.project_id ? projectNames.get(drift.project_id) ?? truncate(drift.project_id, 8) : '—'}</td>
-                  <td className="px-4 py-3 text-gray-600">{timeAgo(drift.created_at)}</td>
-                  <td className="px-4 py-3"><Link href={`/dashboard/drifts/${drift.id}`} className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700">View</Link></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"><tr><th className="px-4 py-3">Risk</th><th className="px-4 py-3">Resource</th><th className="px-4 py-3">Attribute</th><th className="px-4 py-3">Change</th><th className="px-4 py-3">Project</th><th className="px-4 py-3">Detected</th><th className="px-4 py-3">Actions</th></tr></thead>
+              <tbody className="divide-y divide-gray-200">
+                {drifts.map((drift) => (
+                  <tr key={drift.id}>
+                    <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${riskClasses(drift.risk_level)}`}>{drift.risk_level ?? 'low'}</span></td>
+                    <td className="px-4 py-3 text-gray-900">{truncate(`${drift.resource_type ?? 'unknown'} / ${drift.resource_id ?? 'unknown'}`, 40)}</td>
+                    <td className="px-4 py-3 text-gray-600">{drift.attribute ?? '—'}</td>
+                    <td className="px-4 py-3 text-gray-600">{truncate(stringifyValue(drift.desired_value), 30)} → {truncate(stringifyValue(drift.actual_value), 30)}</td>
+                    <td className="px-4 py-3 text-gray-600">{drift.project_id ? projectNames.get(drift.project_id) ?? truncate(drift.project_id, 8) : '—'}</td>
+                    <td className="px-4 py-3 text-gray-600">{timeAgo(drift.created_at)}</td>
+                    <td className="px-4 py-3"><Link href={`/dashboard/drifts/${drift.id}`} className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700">View</Link></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
